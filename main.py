@@ -9,15 +9,13 @@ from google.genai import types
 
 # Robust MoviePy import handling for cloud environments
 try:
-    from moviepy.editor import ImageClip, AudioFileClip
+    from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
     IS_V2 = False
 except ImportError:
-    from moviepy import ImageClip, AudioFileClip
+    from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
     IS_V2 = True
 
 # --- CONFIGURATION ---
-AUDIO_PATH = "cloud_audio.mp3"
-IMAGE_PATH = "cloud_image.png"
 VIDEO_PATH = "cloud_video.mp4"
 
 SYSTEM_INSTRUCTION = """
@@ -26,15 +24,21 @@ Generate a 50-60 second vertical video script about speculative theoretical phys
 
 You MUST format your output exactly like this:
 
-[NARRATION]
-Write the high-impact, gripping narration text here. Speak directly to tech-enthusiasts. Keep it to roughly 120 words. Do not include action notes, hashtags, or bracketed directions.
+[TITLE]
+Write an engaging, click-worthy title (under 50 characters). It MUST use speculative qualifiers (like "Speculative", "Theoretical", "Could", "Hypothesis") to protect channel compliance.
 
+SCENE_START
+[NARRATION]
+Write a high-impact, gripping narration segment here (approx. 25-30 words). Speak directly to tech-enthusiasts. No actions, hashtags, or bracketed directions. Keep sentences clean and fluid.
 [IMAGE_PROMPT]
-Write a single, highly detailed, photorealistic 8K 3D render prompt for an image generator that matches the narration.
+Write a single, highly detailed, photorealistic 8K vertical (9:16) 3D render prompt for an image generator that matches this scene's narrative.
+SCENE_END
+
+Generate EXACTLY 4 distinct scenes using the SCENE_START and SCENE_END markers for each.
 """
 
 def generate_script():
-    print("--- STEP 1: Brainstorming Speculative Script ---")
+    print("--- STEP 1: Brainstorming Speculative Storyboard Script ---")
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     
     models = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
@@ -57,26 +61,45 @@ def generate_script():
     raise RuntimeError("All Gemini models failed to respond.")
 
 def parse_assets(raw_text):
-    print("--- STEP 2: Parsing & Cleaning Script Assets ---")
-    clean = raw_text.replace("**[NARRATION]**", "[NARRATION]").replace("**[IMAGE_PROMPT]**", "[IMAGE_PROMPT]")
-    if "[NARRATION]" not in clean or "[IMAGE_PROMPT]" not in clean:
-        raise ValueError("AI response missed required structural markers.")
+    print("--- STEP 2: Parsing & Cleaning Storyboard Scenes ---")
+    
+    # 1. Parse Title
+    title_match = re.search(r'\\[TITLE\\](.*?)(\n\n|SCENE_START|$)', raw_text, re.DOTALL)
+    title = title_match.group(1).strip() if title_match else "A Speculative Leap in AI Architecture"
+    title = re.sub(r"[*#`_]", "", title).strip()
+    clean_title = f"{title[:70]} | Hypothesis Labs"
+    
+    # 2. Parse Scenes
+    scene_blocks = re.findall(r'SCENE_START(.*?)SCENE_END', raw_text, re.DOTALL)
+    if not scene_blocks:
+        # Fallback split
+        scene_blocks = re.split(r'SCENE_START|SCENE_END', raw_text)
+        scene_blocks = [s.strip() for s in scene_blocks if s.strip()]
         
-    parts = clean.split("[IMAGE_PROMPT]")
-    narration = parts[0].replace("[NARRATION]", "").strip()
-    img_prompt = parts[1].strip() if len(parts) > 1 else ""
-    
-    # Scrubbing out any stray asterisks, hashes, brackets, or code blocks
-    clean_narration = re.sub(r"[*#`_\-\\[\\]]", "", narration).strip()
-    clean_prompt = re.sub(r"```[a-zA-Z]*|```|[*#`_\-\\[\\]]", "", img_prompt).strip()
-    
-    return clean_narration, clean_prompt
+    parsed_scenes = []
+    for block in scene_blocks:
+        narr_match = re.search(r'\\[NARRATION\\](.*?)(\\[IMAGE_PROMPT\\]|$)', block, re.DOTALL)
+        prompt_match = re.search(r'\\[IMAGE_PROMPT\\](.*)', block, re.DOTALL)
+        
+        if narr_match and prompt_match:
+            narration = narr_match.group(1).strip()
+            prompt = prompt_match.group(1).strip()
+            
+            # Clean syntax
+            clean_narr = re.sub(r"[*#`_\-\\[\\]]", "", narration).strip()
+            clean_prompt = re.sub(r"```[a-zA-Z]*|```|[*#`_\-\\[\\]]", "", prompt).strip()
+            
+            if clean_narr and clean_prompt:
+                parsed_scenes.append((clean_narr, clean_prompt))
+                
+    if len(parsed_scenes) < 2:
+        raise ValueError(f"AI response failed to format storyboard scenes properly. Found only {len(parsed_scenes)} valid scenes.")
+        
+    print(f"Successfully parsed Title: '{clean_title}' and {len(parsed_scenes)} storyboard scenes.")
+    return clean_title, parsed_scenes
 
-async def generate_audio(text):
-    print("--- STEP 3: Synthesizing Neural Narrator Voice ---")
+async def generate_audio(text, file_path):
     voice = "en-US-ChristopherNeural"  # Professional, deep narrator voice
-    
-    # Clean text of XML special characters to prevent rendering bugs
     clean_text = re.sub(r"[<>#]", "", text)
     formatted_text = clean_text.replace(". ", "... ").replace("? ", "...? ").replace("! ", "...! ")
     
@@ -86,49 +109,62 @@ async def generate_audio(text):
         rate="-8%",   # Slower rate for a cinematic, authoritative pacing
         pitch="-5Hz"  # Deepened tone for added gravity
     )
-    await communicate.save(AUDIO_PATH)
-    print("Voice track successfully synthesized!")
+    await communicate.save(file_path)
 
-def generate_image(prompt):
-    print("--- STEP 4: Downloading Cinematic Visual backdrop ---")
+def generate_image(prompt, file_path):
     encoded = urllib.parse.quote(prompt)
     url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1920&nologo=true&private=true"
     
     response = requests.get(url)
     if response.status_code == 200:
-        with open(IMAGE_PATH, 'wb') as f:
+        with open(file_path, 'wb') as f:
             f.write(response.content)
-        print("Visual backdrop successfully rendered!")
     else:
-        raise RuntimeError("Image generation server failed.")
+        raise RuntimeError(f"Image generation server failed for prompt: {prompt[:50]}")
 
-def compile_video_with_zoom():
-    print("--- STEP 5: Stitching Assets & Rendering Dynamic Visuals ---")
-    audio = AudioFileClip(AUDIO_PATH)
-    duration = audio.duration
+def compile_scenes_to_video(scenes_data):
+    print("--- STEP 5: Stitching Multi-Scene Cinematic Montage ---")
+    clips = []
     
-    # Ken Burns Zoom Effect: Keep viewer retention high by scaling the image dynamically over time
-    image_clip = ImageClip(IMAGE_PATH).set_duration(duration)
+    for idx, (narration, prompt) in enumerate(scenes_data, 1):
+        audio_path = f"scene_{idx}.mp3"
+        image_path = f"scene_{idx}.png"
+        
+        print(f"Processing Scene {idx}/{len(scenes_data)} (Duration mapping...)")
+        audio = AudioFileClip(audio_path)
+        duration = audio.duration
+        
+        image_clip = ImageClip(image_path).set_duration(duration)
+        
+        # Ken Burns Zoom Effect per scene: rapid visual movement
+        if IS_V2:
+            # MoviePy v2 uses .resized
+            video_clip = image_clip.resized(lambda t: 1.0 + 0.12 * (t / duration))
+            video_clip = video_clip.with_audio(audio)
+        else:
+            # MoviePy v1 uses .resize
+            video_clip = image_clip.resize(lambda t: 1.0 + 0.12 * (t / duration))
+            video_clip = video_clip.set_audio(audio)
+            
+        clips.append(video_clip)
+        
+    final_video = concatenate_videoclips(clips, method="compose")
     
-    if IS_V2:
-        video_clip = image_clip.resized(lambda t: 1.0 + 0.15 * (t / duration))
-        video_clip = video_clip.with_audio(audio)
-    else:
-        video_clip = image_clip.resize(lambda t: 1.0 + 0.15 * (t / duration))
-        video_clip = video_clip.set_audio(audio)
-    
-    video_clip.write_videofile(
+    final_video.write_videofile(
         VIDEO_PATH,
         fps=24,
         codec="libx264",
         audio_codec="aac",
         ffmpeg_params=["-pix_fmt", "yuv420p"]
     )
-    audio.close()
-    video_clip.close()
-    print("Video rendering complete!")
+    
+    # Close resources
+    for clip in clips:
+        clip.close()
+    final_video.close()
+    print("Multi-scene cinematic montage rendering complete!")
 
-def upload_to_youtube(narration):
+def upload_to_youtube(title, full_narration):
     print("--- STEP 6: Publishing to YouTube ---")
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
@@ -143,15 +179,15 @@ def upload_to_youtube(narration):
     )
     youtube = build("youtube", "v3", credentials=creds)
     
-    # Title Rules: Always include speculative qualifiers to protect channel standing [3]
-    title = "A Speculative Leap in Quantum AI Architecture | Hypothesis Labs"
-    
-    # Description Rules: Clear educational disclaimer placed at the very top [3]
+    # Description Rules: Clear educational disclaimer placed at the very top
     description = (
-        f"DISCLAIMER: This video explores a speculative, theoretical design. "
-        f"It is an entertaining scientific thought-experiment and is not currently peer-reviewed.\n\n"
-        f"{narration}\n\n"
-        f"Produced automatically by Hypothesis Labs."
+        "DISCLAIMER: This video explores a speculative, theoretical scientific design. "
+        "It is an entertaining scientific thought-experiment based on existing concepts "
+        "and is not currently peer-reviewed.\n\n"
+        f"{full_narration}\n\n"
+        "What do you think of this theoretical architecture? If we actually built this, "
+        "what bottlenecks would we hit first? Let's discuss in the comments!\n\n"
+        "Produced automatically by Hypothesis Labs."
     )
     
     body = {
@@ -162,7 +198,7 @@ def upload_to_youtube(narration):
         },
         "status": {
             "privacyStatus": "private",  # Uploads as Private first for safety reviews
-            "selfDeclaredSyntheticContent": True  # 100% compliant AI policy labeling [5, 6]
+            "selfDeclaredSyntheticContent": True  # 100% compliant AI policy labeling
         }
     }
     
@@ -179,19 +215,45 @@ def upload_to_youtube(narration):
 
 def main():
     try:
-        script = generate_script()
-        narration, prompt = parse_assets(script)
+        # 1. Generate multi-scene script
+        raw_script = generate_script()
         
-        asyncio.run(generate_audio(narration))
-        generate_image(prompt)
-        compile_video_with_zoom()
-        upload_to_youtube(narration)
+        # 2. Parse into Title and distinct Scenes
+        title, scenes_data = parse_assets(raw_script)
         
+        # 3. Generate Audio assets
+        print("--- STEP 3: Synthesizing Multi-Scene Voice Tracks ---")
+        loop = asyncio.get_event_loop()
+        for idx, (narration, _) in enumerate(scenes_data, 1):
+            audio_path = f"scene_{idx}.mp3"
+            loop.run_until_complete(generate_audio(narration, audio_path))
+            
+        # 4. Generate Image assets
+        print("--- STEP 4: Downloading Multi-Scene Visual Backdrops ---")
+        for idx, (_, prompt) in enumerate(scenes_data, 1):
+            image_path = f"scene_{idx}.png"
+            generate_image(prompt, image_path)
+            
+        # 5. Compile into a Multi-Scene Video with Independent zooms
+        compile_scenes_to_video(scenes_data)
+        
+        # 6. Upload to YouTube
+        full_narration = "\n\n".join([narr for narr, _ in scenes_data])
+        upload_to_youtube(title, full_narration)
+        
+        # Cleanup temporary assets
+        for idx in range(1, len(scenes_data) + 1):
+            try:
+                os.remove(f"scene_{idx}.mp3")
+                os.remove(f"scene_{idx}.png")
+            except OSError:
+                pass
+                
         print("\n🚀 Autopilot successfully completed. Video published to YouTube on the cloud!")
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
         import sys
-        sys.exit(1)  # Force a non-zero exit status so GitHub Actions flags errors correctly
+        sys.exit(1)  # Force non-zero status code so GitHub Actions reports failures correctly
 
 if __name__ == "__main__":
     main()
