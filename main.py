@@ -63,37 +63,43 @@ def generate_script():
 def parse_assets(raw_text):
     print("--- STEP 2: Parsing & Cleaning Storyboard Scenes ---")
     
+    # Pre-clean markdown bolding around headers
+    clean = raw_text
+    for marker in ["TITLE", "NARRATION", "IMAGE_PROMPT", "SCENE_START", "SCENE_END"]:
+        clean = re.sub(r'\*+\s*\[' + marker + r'\]\s*\*+', '[' + marker + ']', clean)
+        clean = re.sub(r'\*+\s*' + marker + r'\s*\*+', marker, clean)
+    
     # 1. Parse Title
-    title_match = re.search(r'\\[TITLE\\](.*?)(\n\n|SCENE_START|$)', raw_text, re.DOTALL)
+    title_match = re.search(r'\[TITLE\](.*?)(\n\n|SCENE_START|$)', clean, re.DOTALL)
     title = title_match.group(1).strip() if title_match else "A Speculative Leap in AI Architecture"
     title = re.sub(r"[*#`_]", "", title).strip()
     clean_title = f"{title[:70]} | Hypothesis Labs"
     
     # 2. Parse Scenes
-    scene_blocks = re.findall(r'SCENE_START(.*?)SCENE_END', raw_text, re.DOTALL)
+    scene_blocks = re.findall(r'SCENE_START(.*?)SCENE_END', clean, re.DOTALL)
     if not scene_blocks:
         # Fallback split
-        scene_blocks = re.split(r'SCENE_START|SCENE_END', raw_text)
+        scene_blocks = re.split(r'SCENE_START|SCENE_END', clean)
         scene_blocks = [s.strip() for s in scene_blocks if s.strip()]
         
     parsed_scenes = []
     for block in scene_blocks:
-        narr_match = re.search(r'\\[NARRATION\\](.*?)(\\[IMAGE_PROMPT\\]|$)', block, re.DOTALL)
-        prompt_match = re.search(r'\\[IMAGE_PROMPT\\](.*)', block, re.DOTALL)
+        narr_match = re.search(r'\[NARRATION\](.*?)(\[IMAGE_PROMPT\]|$)', block, re.DOTALL)
+        prompt_match = re.search(r'\[IMAGE_PROMPT\](.*)', block, re.DOTALL)
         
         if narr_match and prompt_match:
             narration = narr_match.group(1).strip()
             prompt = prompt_match.group(1).strip()
             
             # Clean syntax
-            clean_narr = re.sub(r"[*#`_\-\\[\\]]", "", narration).strip()
-            clean_prompt = re.sub(r"```[a-zA-Z]*|```|[*#`_\-\\[\\]]", "", prompt).strip()
+            clean_narr = re.sub(r"[*#`_\-\[\]]", "", narration).strip()
+            clean_prompt = re.sub(r"```[a-zA-Z]*|```|[*#`_\-\[\]]", "", prompt).strip()
             
             if clean_narr and clean_prompt:
                 parsed_scenes.append((clean_narr, clean_prompt))
                 
     if len(parsed_scenes) < 2:
-        raise ValueError(f"AI response failed to format storyboard scenes properly. Found only {len(parsed_scenes)} valid scenes.")
+        raise ValueError(f"AI response failed to format storyboard scenes properly. Found only {len(parsed_scenes)} valid scenes. Raw Text:\n{raw_text}")
         
     print(f"Successfully parsed Title: '{clean_title}' and {len(parsed_scenes)} storyboard scenes.")
     return clean_title, parsed_scenes
