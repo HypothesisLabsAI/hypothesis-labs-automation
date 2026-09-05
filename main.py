@@ -143,10 +143,10 @@ def upload_to_youtube(narration):
     )
     youtube = build("youtube", "v3", credentials=creds)
     
-    # Title Rules: Always include speculative qualifiers
+    # Title Rules: Always include speculative qualifiers to protect channel standing [3]
     title = "A Speculative Leap in Quantum AI Architecture | Hypothesis Labs"
     
-    # Description Rules: Clear educational disclaimer placed at the very top
+    # Description Rules: Clear educational disclaimer placed at the very top [3]
     description = (
         f"DISCLAIMER: This video explores a speculative, theoretical design. "
         f"It is an entertaining scientific thought-experiment and is not currently peer-reviewed.\n\n"
@@ -162,7 +162,7 @@ def upload_to_youtube(narration):
         },
         "status": {
             "privacyStatus": "private",  # Uploads as Private first for safety reviews
-            "selfDeclaredSyntheticContent": True  # 100% compliant AI policy labeling
+            "selfDeclaredSyntheticContent": True  # 100% compliant AI policy labeling [5, 6]
         }
     }
     
@@ -190,6 +190,8 @@ def main():
         print("\n🚀 Autopilot successfully completed. Video published to YouTube on the cloud!")
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
+        import sys
+        sys.exit(1)  # Force a non-zero exit status so GitHub Actions flags errors correctly
 
 if __name__ == "__main__":
     main()
