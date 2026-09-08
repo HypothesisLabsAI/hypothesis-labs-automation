@@ -1,9 +1,9 @@
 name: Daily YouTube Shorts Publisher
 
 on:
-  schedule:
+  #schedule:
     # Runs automatically every day at 09:00 AM UTC (completely hands-free!)
-    - cron: '0 9 * * *'
+    #- cron: '0 9 * * *'
   workflow_dispatch: # Allows you to manually trigger a video generation anytime from GitHub!
 
 jobs:
