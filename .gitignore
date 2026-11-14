@@ -1,0 +1,19 @@
+# Python virtual environments & bytecode
+venv/
+_pycache__/
+*.pyc 
+
+# Local credentials & secrets 
+
+.env 
+token.json 
+client_secrets.json 
+
+# Temporary rendering outputs 
+
+temp/ 
+*.mp4 
+*.mp3 
+*.wav 
+*.png 
+*.jpg
