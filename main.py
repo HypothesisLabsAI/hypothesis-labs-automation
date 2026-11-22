@@ -38,37 +38,32 @@ Generate EXACTLY 4 distinct scenes using the SCENE_START and SCENE_END markers f
 """
 
 def generate_script():
-    print("--- STEP 1: Brainstorming Speculative Storyboard Script ---")
-    api_key = os.environ.get("GEMINI_API_KEY")
+    print('--- STEP 1: Brainstorming Speculative Storyboard Script ---')
+    import time
+    api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is missing.")
-
+        raise ValueError('GEMINI_API_KEY environment variable is missing.')
     client = genai.Client(api_key=api_key)
-    production_models = [
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash"
-    ]
-
-    for model_name in production_models:
+    for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.8-pro']:
+        print(f'  [Script Engine] Connecting to {model_name}...')
         for attempt in range(1, 4):
             try:
-                print(f"  [Script Engine] Attempting with {model_name} (Try {attempt}/3)...")
-                response = client.models.generate_content(
+                res = client.models.generate_content(
                     model=model_name,
-                    contents="Pick an intriguing speculative theoretical physics, dark matter, or AI consciousness topic and write the Shorts script.",
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        temperature=0.7,
-                    )
+                    contents='Pick an intriguing speculative theoretical physics or AI topic and write the Shorts script.',
+                    config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, temperature=0.7)
                 )
-                return response.text
-            except Exception as e:
-                print(f"  [Warning] {model_name} attempt {attempt} failed: {e}")
-                import time
-                time.sleep(2 * attempt)
-
-    raise RuntimeError("All production Gemini models failed to respond.")
+                if res and res.text:
+                    print(f'  [Script Engine] Script generated successfully via {model_name}!')
+                    return res.text
+            except Exception as ex:
+                err = str(ex)
+                print(f'  [Attempt {attempt}/3] {model_name} error: {err[:60]}...')
+                if '404' in err:
+                    break
+                print(f'  [Backoff] Waiting {attempt * 3}s...')
+                time.sleep(attempt * 3)
+    raise RuntimeError('All specified Gemini models failed to respond.')
 
 async def generate_audio(text, file_path):
     voice = "en-US-ChristopherNeural"  # Professional, deep narrator voice
