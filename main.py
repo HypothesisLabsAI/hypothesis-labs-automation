@@ -65,6 +65,25 @@ def generate_script():
                 time.sleep(attempt * 3)
     raise RuntimeError('All specified Gemini models failed to respond.')
 
+def parse_assets(script_text):
+    import re
+    title_match = re.search(r'\[TITLE\](*?)(\n\n|SCENE_START|$)', script_text, re.DOTALL)
+    title = title_match.group(1).strip() if title_match else "Speculative Physics Hypothesis"
+    clean_title = re.sub(r'[*#`_]', '', title)[:60]
+
+    blocks = re.findall(r'SCENE_START(*?)SCENE_END', script_text, re.DOTALL)
+    scenes_data = []
+    for b in blocks:
+        n_match = re.search(r'\[NARRATION\](*?)(\[IMAGE_PROMPT\]|$)', b, re.DOTALL)
+        p_match = re.search(r'\[IMAGE_PROMPT\](.*)', b, re.DOTALL)
+        if n_match and p_match:
+            narr= re.sub(r'[*#`_\-\[\]]', '', n_match.group(1)).strip()
+            prompt = re.sub(r'[*#`_\-\[\]]', '', p_match.group(1)).strip()
+            if narr and prompt:
+                scenes_data.append((narr, prompt))
+
+    return clean_title, scenes_data
+
 async def generate_audio(text, file_path):
     voice = "en-US-ChristopherNeural"  # Professional, deep narrator voice
     clean_text = re.sub(r"[<>#]", "", text)
