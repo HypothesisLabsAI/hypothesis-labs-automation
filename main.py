@@ -70,7 +70,7 @@ def generate_script():
 
     raise RuntimeError("All production Gemini models failed to respond.")
 
-def generate_audio(text, file_path):
+async def generate_audio(text, file_path):
     voice = "en-US-ChristopherNeural"  # Professional, deep narrator voice
     clean_text = re.sub(r"[<>#]", "", text)
     formatted_text = clean_text.replace(". ", "... ").replace("? ", "...? ").replace("! ", "...! ")
