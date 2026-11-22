@@ -118,15 +118,66 @@ async def generate_audio(text, file_path):
     await communicate.save(file_path)
 
 def generate_image(prompt, file_path):
-    encoded = urllib.parse.quote(prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1080&height=1920&nologo=true&private=true"
-    
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(file_path, 'wb') as f:
-            f.write(response.content)
-    else:
-        raise RuntimeError(f"Image generation server failed for prompt: {prompt[:50]}")
+    """Generates high-definition vertical visuals using Google Imagen 3."""
+    import time, os
+    from google import genai
+    from google.genai import types
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is missing.")
+
+    client = genai.Client(api_key=api_key)
+    enhanced_prompt = (
+        f"{prompt}, vertical 9:16 composition, 8k resolution, cinematic lighting, "
+        f"photorealistic, volumetric atmosphere, dark sci-fi aesthetic, award-winning photography"
+    )
+
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"  [Visual Engine] Calling Google Imagen 3 (Attempt {attempt}/{max_retries})...")
+            result = client.models.generate_images(
+                model="imagen-3.0-generate-002",
+                prompt=enhanced_prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio="9:16",
+                    output_mime_type="image/jpeg",
+                    person_generation="ALLOW_ADULT",
+                    safety_filter_level="BLOCK_LOW_AND_ABOVE",
+                )
+            )
+
+            for generated_image in result.generated_images:
+                with open(file_path, "wb") as out_f:
+                    out_f.write(generated_image.image.image_bytes)
+                print(f"  [Visual Engine] Successfully saved HD frame: {file_path}")
+                return
+
+        except Exception as e:
+            print(f"  [Visual Engine Warning] Imagen attempt {attempt} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(3)
+            else:
+                print("  [Visual Engine Alert] Falling back to secondary generator...")
+                _generate_fallback_image(prompt, file_path)
+
+
+def _generate_fallback_image(prompt, file_path):
+    """Fallback sci-fi canvas if generation fails."""
+    try:
+        from PIL import Image, ImageDraw
+        img = Image.new("RGB", (1080, 1920), color=(10, 14, 23))
+        draw = ImageDraw.Draw(img)
+        for y in range(0, 1920, 120):
+            draw.line([(0, y), (1080, y)], fill=(20, 32, 48), width=1)
+        for x in range(0, 1080, 120):
+            draw.line([(x, 0), (x, 1920)], fill=(20, 32, 48), width=1)
+        img.save(file_path)
+        print(f"  [Visual Engine] Fallback sci-fi canvas generated: {file_path}")
+    except Exception as err:
+        print(f"  [Visual Engine Critical] Fallback failed: {err}")
 
 def compile_scenes_to_video(scenes_data):
     print("--- STEP 5: Stitching Multi-Scene Cinematic Montage ---")
