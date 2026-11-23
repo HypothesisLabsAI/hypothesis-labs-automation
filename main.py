@@ -44,9 +44,9 @@ def generate_script():
     if not api_key:
         raise ValueError('GEMINI_API_KEY environment variable is missing.')
     client = genai.Client(api_key=api_key)
-    for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.8-pro']:
+    for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash']:
         print(f'  [Script Engine] Connecting to {model_name}...')
-        for attempt in range(1, 7):
+        for attempt in range(1, 3):
             try:
                 res = client.models.generate_content(
                     model=model_name,
