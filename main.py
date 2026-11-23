@@ -38,32 +38,40 @@ Generate EXACTLY 4 distinct scenes using the SCENE_START and SCENE_END markers f
 """
 
 def generate_script():
-    print('--- STEP 1: Brainstorming Speculative Storyboard Script ---')
-    import time
-    api_key = os.environ.get('GEMINI_API_KEY')
-    if not api_key:
-        raise ValueError('GEMINI_API_KEY environment variable is missing.')
-    client = genai.Client(api_key=api_key)
-    for model_name in ['gemini-3.8-flash', 'gemini-3.7-flash']:
-        print(f'  [Script Engine] Connecting to {model_name}...')
-        for attempt in range(1, 3):
-            try:
-                res = client.models.generate_content(
-                    model=model_name,
-                    contents='Pick an intriguing speculative theoretical physics or AI topic and write the Shorts script.',
-                    config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, temperature=0.7)
-                )
-                if res and res.text:
-                    print(f'  [Script Engine] Script generated successfully via {model_name}!')
-                    return res.text
-            except Exception as ex:
-                err = str(ex)
-                print(f'  [Attempt {attempt}/3] {model_name} error: {err[:60]}...')
-                if '404' in err:
-                    break
-                print(f'  [Backoff] Waiting {attempt * 3}s...')
-                time.sleep(attempt * 3)
-    raise RuntimeError('All specified Gemini models failed to respond.')
+    print("--- STEP 1: Brainstorming Speculative Storyboard Script ---")
+    import os, time, random
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    if api_key:
+        try:
+            client = genai.Client(api_key=api_key)
+            for model_name in ["gemini-3.8-flash", "gemini-3.7-flash"]:
+                print(f"  [Script Engine] Connecting to {model_name}...")
+                for attempt in range(1, 3):
+                    try:
+                        res = client.models.generate_content(
+                            model=model_name,
+                            contents="Pick an intriguing speculative theoretical physics or AI mind topic and write the Shorts script.",
+                            config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, temperature=0.7)
+                        )
+                        if res and res.text:
+                            print(f"  [Script Engine] Script generated successfully via {model_name}!")
+                            return res.text
+                    except Exception as e:
+                        err = str(e)
+                        print(f"  [Warning] {model_name} error: {err[:65]}...")
+                        if "404" in err or "429" in err:
+                            break
+                        time.sleep(5)
+        except Exception as client_err:
+            print(f"  [Script Engine Warning] Client init error: {client_err}")
+
+    print("  [Script Engine] Gemini unavailable or rate-limited. Activating fail-safe offline storyboard...")
+    fb = [
+        "[TITLE]\nThe Quantum Vacuum Energy Engine Hypothesis\n\nSCENE_START\n[NARRATION]\nStandard quantum electrodynamics proves the vacuum is not empty space, but a boiling sea of zero-point virtual particle fluctuations.\n[IMAGE_PROMPT]\nA glowing quantum vacuum manifold with boiling virtual particles, dark sci-fi laboratory, volumetric blue lighting, 8k vertical render\nSCENE_END\n\nSCENE_START\n[NARRATION]\nThe Casimir effect confirms that placing two uncharged metallic plates nanometers apart produces an observable physical force extracted from nothing.\n[IMAGE_PROMPT]\nTwo macro-scale metallic superconducting plates suspended in a vacuum chamber, microscopic energy arcs between plates, 8k photorealistic\nSCENE_END\n\nSCENE_START\n[NARRATION]\nIf future metamaterials can dynamically alter local boundary conditions, we could theoretically tap this zero-point gradient for limitless propulsion.\n[IMAGE_PROMPT]\nFuturistic interstellar spacecraft with quantum vacuum propulsion drive warping space around it, cinematic dark sci-fi aesthetic, 8k\nSCENE_END\n\nSCENE_START\n[NARRATION]\nWhile macroscopic harvesting violates classical thermodynamics, quantum information theory suggests negative energy densities might unlock the impossible.\n[IMAGE_PROMPT]\nHolographic blueprint of a negative energy warp metric, futuristic computational interface in dark control room, 8k photorealistic\nSCENE_END"
+    ]
+    return random.choice(fb)
+
 
 def parse_assets(script_text):
     import re
